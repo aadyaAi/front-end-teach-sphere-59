@@ -61,16 +61,22 @@ class PeerService {
     try {
       this.peer = new Peer(peerId, {
         host: location.hostname,
-        port: location.protocol === 'https:' ? 443 : 5000,
+        port: 5000,
         path: '/peerjs',
-        secure: location.protocol === 'https:',
+        secure: false,
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
           ]
         },
-        debug: 2
+        debug: 2,
+        retry_options: {
+          retries: 3,
+          minTimeout: 1000,
+          maxTimeout: 5000
+        }
       });
 
       this.peer.on('open', () => {

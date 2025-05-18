@@ -17,12 +17,14 @@ const server = app.listen(port, '0.0.0.0', () => {
 const peerServer = ExpressPeerServer(server, {
   path: '/peerjs',
   allow_discovery: true,
-  proxied: true,
+  proxied: false,
+  debug: true,
   port: port,
   key: 'peerjs',
   alive_timeout: 60000,
-  expire_timeout: 5000,
-  concurrent_limit: 5000
+  expire_timeout: 60000,
+  concurrent_limit: 5000,
+  clean_up_timeout: 1000
 });
 
 // Configure ICE servers for WebRTC connections
