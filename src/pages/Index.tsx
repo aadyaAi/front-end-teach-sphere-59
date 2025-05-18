@@ -19,6 +19,7 @@ const Index = () => {
   const { roomId: urlRoomId } = useParams<{ roomId?: string }>();
   const [roomId, setRoomId] = useState<string>(urlRoomId || generateRoomId());
   const navigate = useNavigate();
+  const [isJoiningExistingRoom, setIsJoiningExistingRoom] = useState<boolean>(!!urlRoomId);
   
   // Sync the URL with the roomId if needed
   useEffect(() => {
@@ -30,12 +31,13 @@ const Index = () => {
 
   // If joining an existing room, show a notification
   useEffect(() => {
-    if (urlRoomId) {
+    if (urlRoomId && isJoiningExistingRoom) {
       toast.info('Joined shared whiteboard room', {
         description: 'You can now collaborate with others in real-time.'
       });
+      setIsJoiningExistingRoom(false);
     }
-  }, [urlRoomId]);
+  }, [urlRoomId, isJoiningExistingRoom]);
 
   const handleSelectTool = (tool: Tool) => {
     setCurrentTool(tool);
@@ -90,7 +92,7 @@ const Index = () => {
         
         <div className="flex-1 flex gap-4">
           <div className="flex-1 rounded-lg shadow-lg overflow-hidden bg-white">
-            <Whiteboard ref={whiteboardRef} />
+            <Whiteboard ref={whiteboardRef} roomId={roomId} />
           </div>
           
           <div className="w-80 h-auto hidden md:block">

@@ -1,6 +1,7 @@
 
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
+import { peerService, DrawingAction } from '@/services/peerService';
 
 type Tool = 'pen' | 'eraser' | 'rectangle' | 'circle' | 'text';
 
@@ -9,7 +10,11 @@ interface Point {
   y: number;
 }
 
-const Whiteboard = forwardRef((props, ref) => {
+interface WhiteboardProps {
+  roomId: string;
+}
+
+const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentTool, setCurrentTool] = useState<Tool>('pen');
@@ -19,6 +24,37 @@ const Whiteboard = forwardRef((props, ref) => {
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
   const canvasHistoryRef = useRef<ImageData[]>([]);
   const historyIndexRef = useRef(-1);
+  const [connectedUsers, setConnectedUsers] = useState<string[]>([]);
+  const isRemoteActionRef = useRef<boolean>(false);
+
+  // Initialize WebRTC peer connection
+  useEffect(() => {
+    if (!roomId) return;
+
+    const userId = peerService.init(roomId, {
+      onConnection: (peerId) => {
+        console.log("Peer connected:", peerId);
+        setConnectedUsers(prev => [...prev, peerId]);
+        toast.success("New collaborator joined", {
+          description: "Someone joined your whiteboard session."
+        });
+      },
+      onDisconnection: (peerId) => {
+        console.log("Peer disconnected:", peerId);
+        setConnectedUsers(prev => prev.filter(id => id !== peerId));
+        toast.info("Collaborator left", {
+          description: "A collaborator has left your whiteboard session."
+        });
+      },
+      onDrawingAction: (action, peerId) => {
+        handleRemoteDrawingAction(action);
+      }
+    });
+
+    return () => {
+      peerService.disconnect();
+    };
+  }, [roomId]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -81,6 +117,85 @@ const Whiteboard = forwardRef((props, ref) => {
     historyIndexRef.current = canvasHistoryRef.current.length - 1;
   };
 
+  const handleRemoteDrawingAction = (action: DrawingAction) => {
+    if (!contextRef.current || !canvasRef.current) return;
+    
+    isRemoteActionRef.current = true;
+    
+    const ctx = contextRef.current;
+    
+    switch (action.type) {
+      case 'start':
+        if (action.startPosition) {
+          ctx.beginPath();
+          if (action.tool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out';
+          } else {
+            ctx.globalCompositeOperation = 'source-over';
+          }
+          if (action.color) ctx.strokeStyle = action.color;
+          if (action.lineWidth) ctx.lineWidth = action.lineWidth;
+          ctx.moveTo(action.startPosition.x, action.startPosition.y);
+        }
+        break;
+        
+      case 'draw':
+        if (action.currentPosition) {
+          ctx.lineTo(action.currentPosition.x, action.currentPosition.y);
+          ctx.stroke();
+        }
+        break;
+        
+      case 'end':
+        if (action.tool === 'rectangle' && action.startPosition && action.currentPosition) {
+          const width = action.currentPosition.x - action.startPosition.x;
+          const height = action.currentPosition.y - action.startPosition.y;
+          ctx.strokeRect(action.startPosition.x, action.startPosition.y, width, height);
+        } else if (action.tool === 'circle' && action.startPosition && action.currentPosition) {
+          const radius = Math.sqrt(
+            Math.pow(action.currentPosition.x - action.startPosition.x, 2) + 
+            Math.pow(action.currentPosition.y - action.startPosition.y, 2)
+          );
+          ctx.beginPath();
+          ctx.arc(action.startPosition.x, action.startPosition.y, radius, 0, 2 * Math.PI);
+          ctx.stroke();
+          ctx.closePath();
+        }
+        
+        ctx.closePath();
+        ctx.globalCompositeOperation = 'source-over';
+        saveCanvasState();
+        break;
+        
+      case 'clear':
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        saveCanvasState();
+        break;
+        
+      case 'undo':
+        if (historyIndexRef.current > 0) {
+          historyIndexRef.current--;
+          ctx.putImageData(canvasHistoryRef.current[historyIndexRef.current], 0, 0);
+        }
+        break;
+        
+      case 'redo':
+        if (historyIndexRef.current < canvasHistoryRef.current.length - 1) {
+          historyIndexRef.current++;
+          ctx.putImageData(canvasHistoryRef.current[historyIndexRef.current], 0, 0);
+        }
+        break;
+    }
+    
+    isRemoteActionRef.current = false;
+  };
+
+  const broadcastDrawingAction = (action: DrawingAction) => {
+    if (isRemoteActionRef.current) return; // Don't broadcast actions that came from remote peers
+    peerService.sendDrawingAction(action);
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const canvas = canvasRef.current;
@@ -112,6 +227,15 @@ const Whiteboard = forwardRef((props, ref) => {
       } else {
         contextRef.current.globalCompositeOperation = 'source-over';
       }
+      
+      // Broadcast drawing action to peers
+      broadcastDrawingAction({
+        type: 'start',
+        tool: currentTool,
+        color: color,
+        lineWidth: lineWidth,
+        startPosition: { x, y }
+      });
     }
   };
 
@@ -136,6 +260,12 @@ const Whiteboard = forwardRef((props, ref) => {
     if (currentTool === 'pen' || currentTool === 'eraser') {
       contextRef.current.lineTo(x, y);
       contextRef.current.stroke();
+      
+      // Broadcast drawing action to peers
+      broadcastDrawingAction({
+        type: 'draw',
+        currentPosition: { x, y }
+      });
     }
   };
 
@@ -145,22 +275,59 @@ const Whiteboard = forwardRef((props, ref) => {
     if (currentTool === 'pen' || currentTool === 'eraser') {
       contextRef.current.closePath();
       contextRef.current.globalCompositeOperation = 'source-over';
+      
+      // Broadcast drawing action to peers
+      broadcastDrawingAction({
+        type: 'end',
+        tool: currentTool
+      });
     } else if (startPosition && contextRef.current && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      const { x: startX, y: startY } = startPosition;
+      let clientX: number, clientY: number;
+      
+      // Use the current mouse position
+      if (event instanceof MouseEvent) {
+        clientX = event.clientX;
+        clientY = event.clientY;
+      } else {
+        // Default to the canvas center if no event
+        clientX = rect.left + rect.width / 2;
+        clientY = rect.top + rect.height / 2;
+      }
+      
+      const currentPosition = {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
       
       if (currentTool === 'rectangle') {
-        const width = startPosition.x - startX;
-        const height = startPosition.y - startY;
-        contextRef.current.strokeRect(startX, startY, width, height);
+        const width = currentPosition.x - startPosition.x;
+        const height = currentPosition.y - startPosition.y;
+        contextRef.current.strokeRect(startPosition.x, startPosition.y, width, height);
+        
+        // Broadcast drawing action to peers
+        broadcastDrawingAction({
+          type: 'end',
+          tool: 'rectangle',
+          startPosition,
+          currentPosition
+        });
       } else if (currentTool === 'circle') {
         const radius = Math.sqrt(
-          Math.pow(startPosition.x - startX, 2) + Math.pow(startPosition.y - startY, 2)
+          Math.pow(currentPosition.x - startPosition.x, 2) + Math.pow(currentPosition.y - startPosition.y, 2)
         );
         contextRef.current.beginPath();
-        contextRef.current.arc(startX, startY, radius, 0, 2 * Math.PI);
+        contextRef.current.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
         contextRef.current.stroke();
         contextRef.current.closePath();
+        
+        // Broadcast drawing action to peers
+        broadcastDrawingAction({
+          type: 'end',
+          tool: 'circle',
+          startPosition,
+          currentPosition
+        });
       }
     }
 
@@ -174,6 +341,10 @@ const Whiteboard = forwardRef((props, ref) => {
     contextRef.current.fillStyle = '#ffffff';
     contextRef.current.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
     saveCanvasState();
+    
+    // Broadcast clear action to peers
+    broadcastDrawingAction({ type: 'clear' });
+    
     toast("Canvas cleared!");
   };
 
@@ -199,6 +370,9 @@ const Whiteboard = forwardRef((props, ref) => {
         0, 
         0
       );
+      
+      // Broadcast undo action to peers
+      broadcastDrawingAction({ type: 'undo' });
     } else {
       toast("Nothing to undo!");
     }
@@ -216,6 +390,9 @@ const Whiteboard = forwardRef((props, ref) => {
         0, 
         0
       );
+      
+      // Broadcast redo action to peers
+      broadcastDrawingAction({ type: 'redo' });
     } else {
       toast("Nothing to redo!");
     }

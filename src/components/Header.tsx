@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Share } from 'lucide-react';
 import ShareRoomDialog from './ShareRoomDialog';
+import CollaborationStatus from './CollaborationStatus';
 
 interface HeaderProps {
   roomId: string;
@@ -21,6 +22,9 @@ const Header: React.FC<HeaderProps> = ({ roomId }) => {
           <span className="ml-2 bg-teach-accent text-white text-xs px-2 py-0.5 rounded-full">
             Beta
           </span>
+          <div className="ml-4">
+            <CollaborationStatus roomId={roomId} />
+          </div>
         </div>
         
         <div className="flex items-center space-x-2">
