@@ -17,32 +17,55 @@ const server = app.listen(port, '0.0.0.0', () => {
 const peerServer = ExpressPeerServer(server, {
   path: '/peerjs',
   allow_discovery: true,
-  pingInterval: 5000,
-  proxied: true
+  proxied: true,
+  port: port,
+  key: 'peerjs',
+  debug: true,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' }
+    ]
+  }
 });
 
 app.use('/', peerServer);
 
-// Health check endpoint
-app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok' });
-});
-
-// Code execution endpoint
-app.post('/api/execute', async (req: Request, res: Response) => {
-  const { code, language } = req.body;
-  try {
-    // Here you can implement code execution logic
-    res.json({ output: 'Code execution successful', error: null });
-  } catch (error) {
-    res.status(500).json({ output: '', error: 'Code execution failed' });
-  }
-});
+// Track connected peers by room
+const roomPeers = new Map<string, Set<string>>();
 
 peerServer.on('connection', (client) => {
-  console.log('Client connected:', client.getId());
+  const clientId = client.getId();
+  const roomId = clientId.split('-')[0]; // Extract room ID from peer ID
+  
+  if (!roomPeers.has(roomId)) {
+    roomPeers.set(roomId, new Set());
+  }
+  roomPeers.get(roomId)?.add(clientId);
+  
+  console.log(`Client connected to room ${roomId}:`, clientId);
 });
 
 peerServer.on('disconnect', (client) => {
-  console.log('Client disconnected:', client.getId());
+  const clientId = client.getId();
+  const roomId = clientId.split('-')[0];
+  
+  roomPeers.get(roomId)?.delete(clientId);
+  if (roomPeers.get(roomId)?.size === 0) {
+    roomPeers.delete(roomId);
+  }
+  
+  console.log(`Client disconnected from room ${roomId}:`, clientId);
+});
+
+// Get peers in a room
+app.get('/api/room/:roomId/peers', (req: Request, res: Response) => {
+  const roomId = req.params.roomId;
+  const peers = Array.from(roomPeers.get(roomId) || []);
+  res.json({ peers });
+});
+
+// Health check endpoint
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok' });
 });
