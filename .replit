@@ -30,7 +30,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server && bun install && bun run dev"
+args = "cd server && bun install && NODE_ENV=production bun run dev"
 
 [[workflows.workflow]]
 name = "Full Stack Dev"
