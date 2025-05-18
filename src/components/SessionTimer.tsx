@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
-import { Timer, Play, Pause, Reset } from "lucide-react";
+import { Timer, Play, Pause, RotateCcw } from "lucide-react";
 import { peerService } from '@/services/peerService';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -176,7 +176,7 @@ const SessionTimer: React.FC<SessionTimerProps> = ({ roomId }) => {
           onClick={handleReset}
           className="p-1 h-8 w-8 flex items-center justify-center"
         >
-          <Reset className="w-4 h-4" />
+          <RotateCcw className="w-4 h-4" />
         </Button>
       </div>
     </div>
