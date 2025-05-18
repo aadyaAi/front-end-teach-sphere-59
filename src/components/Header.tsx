@@ -5,6 +5,7 @@ import { Share, Code } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ShareRoomDialog from './ShareRoomDialog';
 import CollaborationStatus from './CollaborationStatus';
+import SessionTimer from './SessionTimer';
 
 interface HeaderProps {
   roomId: string;
@@ -43,6 +44,8 @@ const Header: React.FC<HeaderProps> = ({ roomId }) => {
         </div>
         
         <div className="flex items-center space-x-2">
+          <SessionTimer roomId={roomId} />
+          
           <Button 
             variant="outline" 
             size="sm" 

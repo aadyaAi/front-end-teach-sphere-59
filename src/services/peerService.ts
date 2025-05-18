@@ -21,13 +21,22 @@ export type CodeAction = {
   senderId?: string;
 };
 
-export type PeerAction = DrawingAction | CodeAction;
+export type TimerAction = {
+  type: 'timer-start' | 'timer-pause' | 'timer-reset';
+  startTime?: number;
+  pausedTime?: number;
+  mode?: 'countdown' | 'countup';
+  senderId?: string;
+};
+
+export type PeerAction = DrawingAction | CodeAction | TimerAction;
 
 type PeerEventCallbacks = {
   onConnection: (peerId: string) => void;
   onDisconnection: (peerId: string) => void;
   onDrawingAction: (action: DrawingAction, peerId: string) => void;
   onCodeAction?: (action: CodeAction, peerId: string) => void;
+  onTimerAction?: (action: TimerAction, peerId: string) => void;
 };
 
 class PeerService {
@@ -36,6 +45,7 @@ class PeerService {
   private callbacks: PeerEventCallbacks | null = null;
   private roomId: string | null = null;
   private userId: string;
+  private timerActionHandler: ((action: TimerAction, peerId: string) => void) | null = null;
 
   constructor() {
     // Generate a unique user ID for this browser session
@@ -112,6 +122,13 @@ class PeerService {
           // Handle different types of actions
           if (action.type.startsWith('code-') && this.callbacks?.onCodeAction) {
             this.callbacks.onCodeAction(action as CodeAction, conn.peer);
+          } else if (action.type.startsWith('timer-')) {
+            // Handle timer actions
+            if (this.timerActionHandler) {
+              this.timerActionHandler(action as TimerAction, conn.peer);
+            } else if (this.callbacks?.onTimerAction) {
+              this.callbacks.onTimerAction(action as TimerAction, conn.peer);
+            }
           } else if (this.callbacks) {
             this.callbacks.onDrawingAction(action as DrawingAction, conn.peer);
           }
@@ -135,6 +152,15 @@ class PeerService {
     });
   }
 
+  // Register a dedicated timer action handler outside the standard callbacks
+  registerTimerActionHandler(handler: (action: TimerAction, peerId: string) => void) {
+    this.timerActionHandler = handler;
+  }
+
+  unregisterTimerActionHandler() {
+    this.timerActionHandler = null;
+  }
+
   sendDrawingAction(action: DrawingAction) {
     this.connections.forEach((conn) => {
       if (conn.open) {
@@ -144,6 +170,15 @@ class PeerService {
   }
 
   sendCodeAction(action: CodeAction) {
+    action.senderId = this.userId;
+    this.connections.forEach((conn) => {
+      if (conn.open) {
+        conn.send(action);
+      }
+    });
+  }
+
+  sendTimerAction(action: TimerAction) {
     action.senderId = this.userId;
     this.connections.forEach((conn) => {
       if (conn.open) {
