@@ -8,7 +8,7 @@ channel = "stable-24_05"
 run = ["sh", "-c", "npm run dev"]
 
 [workflows]
-runButton = "Run Dev Server"
+runButton = "Full Stack Dev"
 
 [[workflows.workflow]]
 name = "Run Dev Server"
@@ -31,6 +31,19 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd server && bun install && bun run dev"
+
+[[workflows.workflow]]
+name = "Full Stack Dev"
+author = 41961415
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && bun install && bun run dev"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bun install && bun run dev"
 
 [[ports]]
 localPort = 8080
