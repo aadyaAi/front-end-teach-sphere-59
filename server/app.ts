@@ -17,8 +17,7 @@ const server = app.listen(port, '0.0.0.0', () => {
 const peerServer = ExpressPeerServer(server, {
   path: '/peerjs',
   allow_discovery: true,
-  proxied: false,
-  debug: true,
+  proxied: true,
   port: port,
   key: 'peerjs',
   alive_timeout: 60000,
