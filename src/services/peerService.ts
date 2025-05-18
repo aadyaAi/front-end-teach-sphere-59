@@ -60,13 +60,20 @@ class PeerService {
 
     try {
       this.peer = new Peer(peerId, {
-        debug: 2,
+        debug: 1,
+        host: '0.0.0.0',
+        port: 5000,
+        path: '/peerjs',
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
-          ]
-        }
+            { urls: 'stun:global.stun.twilio.com:3478' },
+            { urls: 'turn:global.turn.twilio.com:3478', username: 'demo', credential: 'pass' }
+          ],
+          iceCandidatePoolSize: 10
+        },
+        reconnectTimer: 1000,
+        pingInterval: 5000
       });
 
       this.peer.on('open', () => {
