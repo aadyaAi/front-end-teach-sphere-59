@@ -23,7 +23,7 @@ const peerServer = ExpressPeerServer(server, {
   alive_timeout: 60000,
   expire_timeout: 60000,
   concurrent_limit: 5000,
-  clean_up_timeout: 1000
+  cleanupTimeout: 1000
 });
 
 // Configure ICE servers for WebRTC connections
