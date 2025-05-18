@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Badge } from "@/components/ui/badge";
-import { Users, WifiOff } from 'lucide-react';
+import { Users, WifiOff, Code } from 'lucide-react';
 import { peerService } from '@/services/peerService';
+import { useLocation } from 'react-router-dom';
 
 interface CollaborationStatusProps {
   roomId: string;
@@ -11,6 +12,8 @@ interface CollaborationStatusProps {
 const CollaborationStatus: React.FC<CollaborationStatusProps> = ({ roomId }) => {
   const [connectedPeers, setConnectedPeers] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const location = useLocation();
+  const isCodeEditor = location.pathname.includes('/code/');
 
   useEffect(() => {
     const updateConnectionStatus = () => {
@@ -35,7 +38,7 @@ const CollaborationStatus: React.FC<CollaborationStatusProps> = ({ roomId }) => 
 
   return (
     <Badge variant="outline" className="flex items-center gap-1 bg-green-50 text-green-700 border-green-200">
-      <Users className="h-3 w-3" />
+      {isCodeEditor ? <Code className="h-3 w-3" /> : <Users className="h-3 w-3" />}
       <span>{connectedPeers.length} {connectedPeers.length === 1 ? 'collaborator' : 'collaborators'} connected</span>
     </Badge>
   );

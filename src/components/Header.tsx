@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Share } from 'lucide-react';
+import { Share, Code } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import ShareRoomDialog from './ShareRoomDialog';
 import CollaborationStatus from './CollaborationStatus';
 
@@ -11,6 +12,20 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ roomId }) => {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const location = useLocation();
+  
+  // Determine if we're on the whiteboard or code editor page
+  const isCodeEditorPage = location.pathname.includes('/code/');
+  
+  // Generate the appropriate navigation link
+  const navLink = isCodeEditorPage 
+    ? `/room/${roomId}` 
+    : `/code/${roomId}`;
+  
+  // Text for the navigation button
+  const navText = isCodeEditorPage 
+    ? 'Go to Whiteboard' 
+    : 'Go to Code Editor';
 
   return (
     <header className="bg-white border-b border-gray-200 py-4 px-6">
@@ -36,6 +51,14 @@ const Header: React.FC<HeaderProps> = ({ roomId }) => {
           >
             <Share className="h-4 w-4" /> Share Room
           </Button>
+          
+          <Link to={navLink}>
+            <Button variant="outline" size="sm" className="flex items-center gap-1">
+              <Code className="h-4 w-4" />
+              {navText}
+            </Button>
+          </Link>
+          
           <Button variant="default" size="sm">
             New Whiteboard
           </Button>

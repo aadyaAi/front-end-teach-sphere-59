@@ -12,10 +12,22 @@ export type DrawingAction = {
   currentPosition?: { x: number; y: number };
 };
 
+export type CodeAction = {
+  type: 'code-change' | 'code-selection' | 'code-cursor' | 'code-language-change' | 'code-run';
+  content?: string;
+  selection?: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number };
+  position?: { lineNumber: number; column: number };
+  language?: string;
+  senderId?: string;
+};
+
+export type PeerAction = DrawingAction | CodeAction;
+
 type PeerEventCallbacks = {
   onConnection: (peerId: string) => void;
   onDisconnection: (peerId: string) => void;
   onDrawingAction: (action: DrawingAction, peerId: string) => void;
+  onCodeAction?: (action: CodeAction, peerId: string) => void;
 };
 
 class PeerService {
@@ -95,9 +107,13 @@ class PeerService {
       
       conn.on('data', (data) => {
         if (typeof data === 'object' && data !== null && 'type' in data) {
-          const action = data as DrawingAction;
-          if (this.callbacks) {
-            this.callbacks.onDrawingAction(action, conn.peer);
+          const action = data as PeerAction;
+          
+          // Handle different types of actions
+          if (action.type.startsWith('code-') && this.callbacks?.onCodeAction) {
+            this.callbacks.onCodeAction(action as CodeAction, conn.peer);
+          } else if (this.callbacks) {
+            this.callbacks.onDrawingAction(action as DrawingAction, conn.peer);
           }
         }
       });
@@ -127,6 +143,15 @@ class PeerService {
     });
   }
 
+  sendCodeAction(action: CodeAction) {
+    action.senderId = this.userId;
+    this.connections.forEach((conn) => {
+      if (conn.open) {
+        conn.send(action);
+      }
+    });
+  }
+
   disconnect() {
     this.connections.forEach((conn) => conn.close());
     this.connections.clear();
@@ -142,6 +167,10 @@ class PeerService {
 
   isConnected(): boolean {
     return this.peer !== null && this.connections.size > 0;
+  }
+
+  getUserId(): string {
+    return this.userId;
   }
 }
 
