@@ -20,12 +20,19 @@ const peerServer = ExpressPeerServer(server, {
   proxied: true,
   port: port,
   key: 'peerjs',
-  config: {
+  alive_timeout: 60000,
+  expire_timeout: 5000,
+  concurrent_limit: 5000
+});
+
+// Configure ICE servers for WebRTC connections
+app.get('/peerjs/config', (req: Request, res: Response) => {
+  res.json({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:global.stun.twilio.com:3478' }
     ]
-  }
+  });
 });
 
 app.use('/', peerServer);
