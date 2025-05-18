@@ -12,6 +12,15 @@ interface SessionTimerProps {
 
 type TimerMode = 'countdown' | 'countup';
 
+// Timer state interface for localStorage
+interface TimerState {
+  isRunning: boolean;
+  mode: TimerMode;
+  startTime: number | null;
+  pausedTime: number;
+  lastUpdated: number;
+}
+
 const SessionTimer: React.FC<SessionTimerProps> = ({ roomId }) => {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [time, setTime] = useState<number>(0); // time in seconds
@@ -19,6 +28,52 @@ const SessionTimer: React.FC<SessionTimerProps> = ({ roomId }) => {
   const [startTime, setStartTime] = useState<number | null>(null);
   const [pausedTime, setPausedTime] = useState<number>(0);
   const location = useLocation();
+
+  // Load timer state from localStorage on component mount
+  useEffect(() => {
+    const loadTimerState = () => {
+      const storedState = localStorage.getItem(`timer-state-${roomId}`);
+      
+      if (storedState) {
+        try {
+          const parsedState: TimerState = JSON.parse(storedState);
+          setIsRunning(parsedState.isRunning);
+          setMode(parsedState.mode);
+          
+          if (parsedState.isRunning && parsedState.startTime) {
+            // Adjust the startTime to account for time that passed while away
+            const timeElapsedSinceLastUpdate = Math.floor((Date.now() - parsedState.lastUpdated) / 1000);
+            setStartTime(Date.now() - ((Date.now() - parsedState.startTime) + timeElapsedSinceLastUpdate * 1000));
+          } else {
+            setStartTime(parsedState.startTime);
+          }
+          
+          setPausedTime(parsedState.pausedTime);
+        } catch (error) {
+          console.error('Error parsing timer state from localStorage:', error);
+        }
+      }
+    };
+    
+    loadTimerState();
+  }, [roomId]);
+
+  // Save timer state to localStorage whenever it changes
+  useEffect(() => {
+    const saveTimerState = () => {
+      const stateToSave: TimerState = {
+        isRunning,
+        mode,
+        startTime,
+        pausedTime,
+        lastUpdated: Date.now()
+      };
+      
+      localStorage.setItem(`timer-state-${roomId}`, JSON.stringify(stateToSave));
+    };
+    
+    saveTimerState();
+  }, [isRunning, mode, startTime, pausedTime, roomId]);
 
   // Format seconds into MM:SS
   const formatTime = (seconds: number): string => {
