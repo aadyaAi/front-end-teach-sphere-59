@@ -20,7 +20,6 @@ const peerServer = ExpressPeerServer(server, {
   proxied: true,
   port: port,
   key: 'peerjs',
-  debug: true,
   config: {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -36,7 +35,7 @@ const roomPeers = new Map<string, Set<string>>();
 
 peerServer.on('connection', (client) => {
   const clientId = client.getId();
-  const roomId = clientId.split('-')[0]; // Extract room ID from peer ID
+  const roomId = clientId.split('-')[0];
   
   if (!roomPeers.has(roomId)) {
     roomPeers.set(roomId, new Set());
