@@ -7,7 +7,12 @@ import { Request, Response } from 'express';
 const app = express();
 const port = 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json());
 
 const server = app.listen(port, '0.0.0.0', () => {
@@ -22,7 +27,8 @@ const peerServer = ExpressPeerServer(server, {
   key: 'peerjs',
   alive_timeout: 60000,
   expire_timeout: 60000,
-  concurrent_limit: 5000
+  concurrent_limit: 5000,
+  debug: true
 });
 
 // Configure ICE servers for WebRTC connections

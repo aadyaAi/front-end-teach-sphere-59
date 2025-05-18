@@ -60,10 +60,10 @@ class PeerService {
 
     try {
       this.peer = new Peer(peerId, {
-        host: location.hostname,
-        port: 5000,
+        host: window.location.hostname,
+        port: Number(window.location.port) || 5000,
         path: '/peerjs',
-        secure: false,
+        secure: window.location.protocol === 'https:',
         config: {
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
