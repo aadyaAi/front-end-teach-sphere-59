@@ -46,9 +46,10 @@ class PeerService {
   private roomId: string | null = null;
   private userId: string;
   private timerActionHandler: ((action: TimerAction, peerId: string) => void) | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 3;
 
   constructor() {
-    // Generate a unique user ID for this browser session
     this.userId = `user-${Math.random().toString(36).substring(2, 10)}`;
   }
 
@@ -56,54 +57,88 @@ class PeerService {
     this.roomId = roomId;
     this.callbacks = callbacks;
     const peerId = `${roomId}-${this.userId}`;
-    
+
     try {
-      this.peer = new Peer(peerId);
-      
+      this.peer = new Peer(peerId, {
+        debug: 2,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
+          ]
+        }
+      });
+
       this.peer.on('open', () => {
         console.log('Peer connection established with ID:', peerId);
+        this.reconnectAttempts = 0;
         this.joinRoom();
       });
-      
+
       this.peer.on('connection', (conn) => this.handleConnection(conn));
-      
+
       this.peer.on('error', (err) => {
         console.error('Peer connection error:', err);
-        toast.error('Connection error', {
-          description: 'There was an error connecting to the room. Please try again.'
-        });
+        if (err.type === 'peer-unavailable') {
+          // Ignore peer-unavailable errors during room joining
+          return;
+        }
+        
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          setTimeout(() => this.reconnect(), 1000 * this.reconnectAttempts);
+        } else {
+          toast.error('Connection error', {
+            description: 'There was an error connecting to the room. Please try again.'
+          });
+        }
       });
+
+      this.peer.on('disconnected', () => {
+        console.log('Peer disconnected. Attempting to reconnect...');
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          setTimeout(() => this.reconnect(), 1000 * this.reconnectAttempts);
+        }
+      });
+
     } catch (error) {
       console.error('Failed to initialize peer:', error);
       toast.error('Connection failed', {
         description: 'Could not initialize connection. Please refresh the page and try again.'
       });
     }
-    
+
     return this.userId;
+  }
+
+  private reconnect() {
+    if (this.peer) {
+      this.peer.reconnect();
+    }
   }
 
   private joinRoom() {
     if (!this.peer || !this.roomId) return;
-    
-    // Look for other peers in the same room
+
     const roomPrefix = `${this.roomId}-`;
-    
-    // This is a simplified discovery mechanism
-    // In a production environment, you might want to use a signaling server
-    // Here we're using a predefined format: roomId-userId
-    // Try to connect to a few potential peers - assuming there aren't too many
-    for (let i = 0; i < 10; i++) {
-      const attemptId = `${roomPrefix}user-${i}`;
-      
-      // Don't connect to ourselves
-      if (attemptId === this.peer.id) continue;
-      
-      const conn = this.peer.connect(attemptId);
-      if (conn) {
-        this.handleConnection(conn);
-      }
-    }
+    const currentPeers = Array.from(this.connections.keys());
+
+    // Connect to existing peers in the room
+    this.peer.listAllPeers((peers) => {
+      peers.forEach((peerId) => {
+        if (
+          peerId.startsWith(roomPrefix) &&
+          peerId !== this.peer?.id &&
+          !currentPeers.includes(peerId)
+        ) {
+          const conn = this.peer?.connect(peerId);
+          if (conn) {
+            this.handleConnection(conn);
+          }
+        }
+      });
+    });
   }
 
   private handleConnection(conn: DataConnection) {
@@ -119,11 +154,9 @@ class PeerService {
         if (typeof data === 'object' && data !== null && 'type' in data) {
           const action = data as PeerAction;
           
-          // Handle different types of actions
           if (action.type.startsWith('code-') && this.callbacks?.onCodeAction) {
             this.callbacks.onCodeAction(action as CodeAction, conn.peer);
           } else if (action.type.startsWith('timer-')) {
-            // Handle timer actions
             if (this.timerActionHandler) {
               this.timerActionHandler(action as TimerAction, conn.peer);
             } else if (this.callbacks?.onTimerAction) {
@@ -152,7 +185,6 @@ class PeerService {
     });
   }
 
-  // Register a dedicated timer action handler outside the standard callbacks
   registerTimerActionHandler(handler: (action: TimerAction, peerId: string) => void) {
     this.timerActionHandler = handler;
   }
@@ -209,5 +241,4 @@ class PeerService {
   }
 }
 
-// Singleton instance
 export const peerService = new PeerService();
