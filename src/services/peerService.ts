@@ -1,4 +1,3 @@
-
 import Peer, { DataConnection } from 'peerjs';
 import { toast } from 'sonner';
 
@@ -71,12 +70,7 @@ class PeerService {
             { urls: 'stun:stun2.l.google.com:19302' }
           ]
         },
-        debug: 2,
-        retry_options: {
-          retries: 3,
-          minTimeout: 1000,
-          maxTimeout: 5000
-        }
+        debug: 2
       });
 
       this.peer.on('open', () => {
