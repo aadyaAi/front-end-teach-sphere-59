@@ -269,7 +269,7 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
     }
   };
 
-  const finishDrawing = () => {
+  const finishDrawing = (e?: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement> | null) => {
     if (!isDrawing || !contextRef.current) return;
     
     if (currentTool === 'pen' || currentTool === 'eraser') {
@@ -285,14 +285,27 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
       const rect = canvasRef.current.getBoundingClientRect();
       let clientX: number, clientY: number;
       
-      // Use the current mouse position
-      if (event instanceof MouseEvent) {
-        clientX = event.clientX;
-        clientY = event.clientY;
+      // Use the coordinates from the event if available
+      if (e) {
+        if ('touches' in e) {
+          // For touch events, use the last touch point
+          if (e.changedTouches && e.changedTouches.length > 0) {
+            clientX = e.changedTouches[0].clientX;
+            clientY = e.changedTouches[0].clientY;
+          } else {
+            // Fallback to using startPosition with an offset for the end point
+            clientX = rect.left + startPosition.x + 100;
+            clientY = rect.top + startPosition.y + 100;
+          }
+        } else {
+          // For mouse events
+          clientX = e.clientX;
+          clientY = e.clientY;
+        }
       } else {
-        // Default to the canvas center if no event
-        clientX = rect.left + rect.width / 2;
-        clientY = rect.top + rect.height / 2;
+        // If no event is provided, use startPosition with an offset for the end point
+        clientX = rect.left + startPosition.x + 100;
+        clientY = rect.top + startPosition.y + 100;
       }
       
       const currentPosition = {
@@ -415,11 +428,11 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
         className="w-full h-full border border-gray-300 rounded-lg bg-white cursor-crosshair"
         onMouseDown={startDrawing}
         onMouseMove={draw}
-        onMouseUp={finishDrawing}
-        onMouseLeave={finishDrawing}
+        onMouseUp={(e) => finishDrawing(e)}
+        onMouseLeave={(e) => finishDrawing(e)}
         onTouchStart={startDrawing}
         onTouchMove={draw}
-        onTouchEnd={finishDrawing}
+        onTouchEnd={(e) => finishDrawing(e)}
       />
     </div>
   );
