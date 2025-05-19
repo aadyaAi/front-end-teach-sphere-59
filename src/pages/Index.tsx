@@ -41,11 +41,17 @@ const Index = () => {
 
   const handleSelectTool = (tool: Tool) => {
     setCurrentTool(tool);
+    if (whiteboardRef.current) {
+      whiteboardRef.current.setTool(tool);
+    }
     toast(`${tool.charAt(0).toUpperCase() + tool.slice(1)} tool selected`);
   };
 
   const handleColorChange = (color: string) => {
     setCurrentColor(color);
+    if (whiteboardRef.current) {
+      whiteboardRef.current.setColor(color);
+    }
   };
 
   const handleClear = () => {
@@ -92,7 +98,12 @@ const Index = () => {
         
         <div className="flex-1 flex gap-4">
           <div className="flex-1 rounded-lg shadow-lg overflow-hidden bg-white">
-            <Whiteboard ref={whiteboardRef} roomId={roomId} />
+            <Whiteboard 
+              ref={whiteboardRef} 
+              roomId={roomId} 
+              tool={currentTool}
+              color={currentColor}
+            />
           </div>
           
           <div className="w-80 h-auto hidden md:block">

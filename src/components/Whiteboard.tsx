@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { toast } from 'sonner';
 import { peerService, DrawingAction } from '@/services/peerService';
@@ -12,13 +11,15 @@ interface Point {
 
 interface WhiteboardProps {
   roomId: string;
+  tool?: Tool;
+  color?: string;
 }
 
-const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
+const Whiteboard = forwardRef(({ roomId, tool = 'pen', color = '#2563eb' }: WhiteboardProps, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [currentTool, setCurrentTool] = useState<Tool>('pen');
-  const [color, setColor] = useState('#2563eb');
+  const [currentTool, setCurrentTool] = useState<Tool>(tool);
+  const [currentColor, setCurrentColor] = useState(color);
   const [lineWidth, setLineWidth] = useState(3);
   const [startPosition, setStartPosition] = useState<Point | null>(null);
   const contextRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -26,6 +27,19 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
   const historyIndexRef = useRef(-1);
   const [connectedUsers, setConnectedUsers] = useState<string[]>([]);
   const isRemoteActionRef = useRef<boolean>(false);
+
+  // Update internal state when props change
+  useEffect(() => {
+    if (tool !== currentTool) {
+      setCurrentTool(tool);
+    }
+  }, [tool]);
+
+  useEffect(() => {
+    if (color !== currentColor) {
+      setCurrentColor(color);
+    }
+  }, [color]);
 
   // Initialize WebRTC peer connection
   useEffect(() => {
@@ -73,7 +87,7 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
     ctx.scale(2, 2);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = currentColor;
     ctx.lineWidth = lineWidth;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -99,9 +113,9 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
 
   useEffect(() => {
     if (!contextRef.current) return;
-    contextRef.current.strokeStyle = color;
+    contextRef.current.strokeStyle = currentColor;
     contextRef.current.lineWidth = lineWidth;
-  }, [color, lineWidth]);
+  }, [currentColor, lineWidth]);
 
   const saveCanvasState = () => {
     const canvas = canvasRef.current;
@@ -218,25 +232,24 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
     setIsDrawing(true);
     setStartPosition({ x, y });
     
-    if (currentTool === 'pen' || currentTool === 'eraser') {
-      contextRef.current.beginPath();
-      contextRef.current.moveTo(x, y);
-      
-      if (currentTool === 'eraser') {
-        contextRef.current.globalCompositeOperation = 'destination-out';
-      } else {
-        contextRef.current.globalCompositeOperation = 'source-over';
-      }
-      
-      // Broadcast drawing action to peers
-      broadcastDrawingAction({
-        type: 'start',
-        tool: currentTool,
-        color: color,
-        lineWidth: lineWidth,
-        startPosition: { x, y }
-      });
+    // All tools now begin with a path setup, but different tool types will finalize differently
+    contextRef.current.beginPath();
+    contextRef.current.moveTo(x, y);
+    
+    if (currentTool === 'eraser') {
+      contextRef.current.globalCompositeOperation = 'destination-out';
+    } else {
+      contextRef.current.globalCompositeOperation = 'source-over';
     }
+    
+    // Broadcast drawing action to peers
+    broadcastDrawingAction({
+      type: 'start',
+      tool: currentTool,
+      color: currentColor,
+      lineWidth: lineWidth,
+      startPosition: { x, y }
+    });
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -257,6 +270,7 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
+    // For pen and eraser, draw continuously. For shapes, we'll handle drawing in finishDrawing
     if (currentTool === 'pen' || currentTool === 'eraser') {
       contextRef.current.lineTo(x, y);
       contextRef.current.stroke();
@@ -269,8 +283,31 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
     }
   };
 
-  const finishDrawing = (e?: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement> | null) => {
-    if (!isDrawing || !contextRef.current) return;
+  const finishDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || !contextRef.current || !canvasRef.current) return;
+    
+    // Get the current position for shape drawing
+    const rect = canvasRef.current.getBoundingClientRect();
+    let clientX: number, clientY: number;
+    
+    if ('touches' in e) {
+      // For touch events, use the changedTouches for the end position
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        clientX = e.changedTouches[0].clientX;
+        clientY = e.changedTouches[0].clientY;
+      } else {
+        clientX = rect.left;
+        clientY = rect.top;
+      }
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    const currentPosition = {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
     
     if (currentTool === 'pen' || currentTool === 'eraser') {
       contextRef.current.closePath();
@@ -281,41 +318,14 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
         type: 'end',
         tool: currentTool
       });
-    } else if (startPosition && contextRef.current && canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      let clientX: number, clientY: number;
-      
-      // Use the coordinates from the event if available
-      if (e) {
-        if ('touches' in e) {
-          // For touch events, use the last touch point
-          if (e.changedTouches && e.changedTouches.length > 0) {
-            clientX = e.changedTouches[0].clientX;
-            clientY = e.changedTouches[0].clientY;
-          } else {
-            // Fallback to using startPosition with an offset for the end point
-            clientX = rect.left + startPosition.x + 100;
-            clientY = rect.top + startPosition.y + 100;
-          }
-        } else {
-          // For mouse events
-          clientX = e.clientX;
-          clientY = e.clientY;
-        }
-      } else {
-        // If no event is provided, use startPosition with an offset for the end point
-        clientX = rect.left + startPosition.x + 100;
-        clientY = rect.top + startPosition.y + 100;
-      }
-      
-      const currentPosition = {
-        x: clientX - rect.left,
-        y: clientY - rect.top
-      };
-      
+    } else if (startPosition && contextRef.current) {
+      // Draw shape at the end
       if (currentTool === 'rectangle') {
         const width = currentPosition.x - startPosition.x;
         const height = currentPosition.y - startPosition.y;
+        
+        // Clear any path that might have been drawn during mouse movement
+        contextRef.current.beginPath();
         contextRef.current.strokeRect(startPosition.x, startPosition.y, width, height);
         
         // Broadcast drawing action to peers
@@ -327,12 +337,14 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
         });
       } else if (currentTool === 'circle') {
         const radius = Math.sqrt(
-          Math.pow(currentPosition.x - startPosition.x, 2) + Math.pow(currentPosition.y - startPosition.y, 2)
+          Math.pow(currentPosition.x - startPosition.x, 2) + 
+          Math.pow(currentPosition.y - startPosition.y, 2)
         );
+        
+        // Clear any path that might have been drawn during mouse movement
         contextRef.current.beginPath();
         contextRef.current.arc(startPosition.x, startPosition.y, radius, 0, 2 * Math.PI);
         contextRef.current.stroke();
-        contextRef.current.closePath();
         
         // Broadcast drawing action to peers
         broadcastDrawingAction({
@@ -416,7 +428,7 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
     downloadCanvas,
     undo,
     redo,
-    setColor: (newColor: string) => setColor(newColor),
+    setColor: (newColor: string) => setCurrentColor(newColor),
     setLineWidth: (width: number) => setLineWidth(width),
     setTool: (tool: Tool) => setCurrentTool(tool)
   }));
@@ -428,11 +440,11 @@ const Whiteboard = forwardRef(({ roomId }: WhiteboardProps, ref) => {
         className="w-full h-full border border-gray-300 rounded-lg bg-white cursor-crosshair"
         onMouseDown={startDrawing}
         onMouseMove={draw}
-        onMouseUp={(e) => finishDrawing(e)}
-        onMouseLeave={(e) => finishDrawing(e)}
+        onMouseUp={finishDrawing}
+        onMouseLeave={finishDrawing}
         onTouchStart={startDrawing}
         onTouchMove={draw}
-        onTouchEnd={(e) => finishDrawing(e)}
+        onTouchEnd={finishDrawing}
       />
     </div>
   );
